@@ -121,7 +121,7 @@ public class Server implements Runnable {
                     client.close();
                 }
             }catch(IOException io){
-                // ignore
+                // ignore this
             }
         }
 
