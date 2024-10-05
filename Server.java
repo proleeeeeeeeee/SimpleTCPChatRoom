@@ -17,7 +17,7 @@ public class Server implements Runnable {
     @Override
     public void run() {
         try {
-            serverSocket = new ServerSocket(8888);
+            serverSocket = new ServerSocket(9999);
             pool = Executors.newCachedThreadPool();
             while(!done) {
                 Socket client = serverSocket.accept();
@@ -25,7 +25,7 @@ public class Server implements Runnable {
                 connections.add(handler);
                 pool.execute(handler);
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             shutDown();
         }
 
@@ -33,6 +33,7 @@ public class Server implements Runnable {
 
     public void shutDown(){
         done = true;
+        pool.shutdown();
         if(!serverSocket.isClosed()){
             try {
                 serverSocket.close();
@@ -48,7 +49,7 @@ public class Server implements Runnable {
     class connectionHandler implements Runnable{
         private Socket client;
         private BufferedReader in;
-        private BufferedWriter out;
+        private PrintWriter out;
         private String Nickname;
         connectionHandler(Socket client){
             this.client = client;
@@ -57,9 +58,11 @@ public class Server implements Runnable {
         public void run() {
             try{
                 in = new BufferedReader(new InputStreamReader(client.getInputStream()));
-                out = new BufferedWriter(new OutputStreamWriter(client.getOutputStream()));
+                out = new PrintWriter (new OutputStreamWriter(client.getOutputStream()), true);
+
                 while(true) {
-                    System.out.print("Please Enter Nickname: ");
+
+                    out.println("Please Enter Nickname: ");
                     Nickname = in.readLine();
                     if(Nickname != null && !Nickname.trim().isEmpty()){
                         break;
@@ -69,7 +72,7 @@ public class Server implements Runnable {
                     }
                 }
                 System.out.println(Nickname + " is connected!");
-                broadCastMessage(Nickname + "Join the chat!");
+                broadCastMessage(Nickname + " Join the chat!");
                 String msg;
                 while((msg = in.readLine()) != null){
                     if (msg.startsWith("/nick")){
@@ -80,12 +83,13 @@ public class Server implements Runnable {
                             System.out.println("Successfully change nickname to " + Nickname);
                         }
                         else{
-                            out.write("No nickname Provided");
+                            out.println("No nickname Provided");
                         }
                     }
                     else if(msg.startsWith("/quit")){
                         broadCastMessage(Nickname + " left the chat!");
                         shutDown();
+                        break;
                     }
                     else {
                         broadCastMessage(Nickname + ": " + msg);
@@ -98,11 +102,7 @@ public class Server implements Runnable {
         }
 
         public void sendMessage(String msg){
-            try {
-                out.write(msg);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            out.println(msg);
         }
 
         public void broadCastMessage(String msg){
@@ -115,13 +115,17 @@ public class Server implements Runnable {
 
         public void shutDown(){
             try {
-                in.close();
-                out.close();
-                if (!client.isClosed()) {
-                    client.close();
+                if (in != null) in.close();  // Close BufferedReader
+                if (out != null) out.close();  // Close PrintWriter
+                if (client != null && !client.isClosed()) {
+                    client.close();  // Close socket if it's still open
                 }
-            }catch(IOException io){
-                // ignore this
+            } catch (IOException io) {
+                // ignore errors during shutdown
+            } finally {
+                // Remove this connection from the list of active connections
+                connections.remove(this);
+                System.out.println(Nickname + " has disconnected.");
             }
         }
 
